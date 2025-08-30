@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { connectToDatabase } from "@/lib/db";
+import { UserModel } from "@/lib/models";
 
 type ProductItem = {
   id: string;
@@ -24,6 +26,21 @@ export async function POST(req: NextRequest) {
     const image = form.get("image");
     if (!(image instanceof Blob)) {
       return new Response(JSON.stringify({ error: "Missing image" }), { status: 400 });
+    }
+
+    const email = form.get("email") as string | null;
+    if (!email) {
+      return new Response(JSON.stringify({ error: "Missing email for credit check" }), { status: 400 });
+    }
+    await connectToDatabase();
+    const user = await UserModel.findOne({ email });
+    if (!user) {
+      // Seed free credits on first use
+      await UserModel.create({ email, credits: 5, wishlist: [] });
+    }
+    const fresh = await UserModel.findOne({ email });
+    if ((fresh?.credits ?? 0) <= 0) {
+      return new Response(JSON.stringify({ error: "No credits left. Purchase more credits." }), { status: 402 });
     }
 
     const apiKey = process.env.SERPAPI_KEY;
@@ -62,6 +79,9 @@ export async function POST(req: NextRequest) {
 
     const data = await resp.json();
     const items: ProductItem[] = simplifySerpApiLens(data);
+
+    // Debit 1 credit per successful search
+    await UserModel.updateOne({ email }, { $inc: { credits: -1 } });
 
     return new Response(JSON.stringify({ items }), {
       status: 200,
