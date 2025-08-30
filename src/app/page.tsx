@@ -1,103 +1,263 @@
-import Image from "next/image";
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+type ProductItem = {
+  id: string;
+  title: string;
+  imageUrl?: string;
+  linkUrl?: string;
+  source?: string;
+  priceText?: string;
+};
+
+type Selection = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [file, setFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imgNatural, setImgNatural] = useState<{ w: number; h: number } | null>(null);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [results, setResults] = useState<ProductItem[]>([]);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+  useEffect(() => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setImageUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const onFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) {
+      setFile(f);
+      setSelection(null);
+      setResults([]);
+    }
+  }, []);
+
+  const displayedSize = useMemo(() => {
+    const img = imgRef.current;
+    if (!img) return null;
+    return { w: img.clientWidth, h: img.clientHeight };
+  }, [imageUrl]);
+
+  const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const el = e.currentTarget;
+    setImgNatural({ w: el.naturalWidth, h: el.naturalHeight });
+  }, []);
+
+  const onMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!imgRef.current) return;
+    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setDragStart({ x, y });
+    setSelection({ x, y, width: 0, height: 0 });
+  }, []);
+
+  const onMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragStart) return;
+    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const sx = Math.min(dragStart.x, x);
+    const sy = Math.min(dragStart.y, y);
+    const w = Math.abs(x - dragStart.x);
+    const h = Math.abs(y - dragStart.y);
+    setSelection({ x: sx, y: sy, width: w, height: h });
+  }, [dragStart]);
+
+  const onMouseUp = useCallback(() => {
+    setDragStart(null);
+  }, []);
+
+  const cropToBlob = useCallback(async (): Promise<Blob | null> => {
+    if (!imageUrl || !selection || !imgRef.current || !displayedSize) return null;
+    if (selection.width < 10 || selection.height < 10) return null;
+    const imgEl = imgRef.current;
+    const scaleX = imgEl.naturalWidth / displayedSize.w;
+    const scaleY = imgEl.naturalHeight / displayedSize.h;
+    const sx = Math.round(selection.x * scaleX);
+    const sy = Math.round(selection.y * scaleY);
+    const sw = Math.round(selection.width * scaleX);
+    const sh = Math.round(selection.height * scaleY);
+    const canvas = document.createElement("canvas");
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    await new Promise<void>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+        resolve();
+      };
+      img.src = imageUrl;
+      img.crossOrigin = "anonymous";
+    });
+    return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92));
+  }, [imageUrl, selection, displayedSize]);
+
+  const onSearch = useCallback(async () => {
+    if (!file && !imageUrl) return;
+    setIsSearching(true);
+    setResults([]);
+    try {
+      const form = new FormData();
+      let blobToSend: Blob | null = null;
+      if (selection) {
+        blobToSend = await cropToBlob();
+      }
+      if (!blobToSend && file) {
+        blobToSend = file;
+      }
+      if (!blobToSend) throw new Error("No image to send");
+      const filename = (file && file.name) || "crop.jpg";
+      form.append("image", blobToSend, filename);
+      form.append("filename", filename);
+      const res = await fetch("/api/visual-search", { method: "POST", body: form });
+      if (res.status === 404) {
+        // Try alternate route path if framework didn't register the first one
+        const res2 = await fetch("/api/lens", { method: "POST", body: form });
+        if (!res2.ok) {
+          let message = "Search failed";
+          try { const err = await res2.json(); message = err?.details || err?.error || message; } catch { try { message = await res2.text(); } catch {} }
+          throw new Error(message || "Search failed");
+        }
+        const data2 = (await res2.json()) as { items: ProductItem[] };
+        setResults(data2.items || []);
+        setIsSearching(false);
+        return;
+      }
+      if (!res.ok) {
+        let message = "Search failed";
+        try {
+          const err = await res.json();
+          message = err?.details || err?.error || message;
+        } catch {
+          try { message = await res.text(); } catch {}
+        }
+        throw new Error(message || "Search failed");
+      }
+      const data = (await res.json()) as { items: ProductItem[] };
+      setResults(data.items || []);
+    } catch (err) {
+      console.error(err);
+      alert("Search failed. Check console for details.");
+    } finally {
+      setIsSearching(false);
+    }
+  }, [file, imageUrl, selection, cropToBlob]);
+
+  const clearAll = useCallback(() => {
+    setFile(null);
+    setImageUrl(null);
+    setSelection(null);
+    setResults([]);
+  }, []);
+
+  return (
+    <div className="min-h-screen p-6 sm:p-10">
+      <main className="max-w-5xl mx-auto w-full">
+        <h1 className="text-2xl sm:text-3xl font-semibold mb-6">Objektify</h1>
+        {!imageUrl && (
+          <div className="border border-black/[.08] dark:border-white/[.145] rounded-xl p-6">
+            <p className="mb-3">Upload an image of the object you want to buy:</p>
+            <input type="file" accept="image/*" onChange={onFileChange} />
+            <p className="text-xs text-neutral-500 mt-2">Tip: After uploading, drag to select the object to focus search.</p>
+          </div>
+        )}
+
+        {imageUrl && (
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  className="rounded-md border px-3 py-1.5 text-sm hover:bg-black/[.03] dark:hover:bg-white/[.06]"
+                  onClick={clearAll}
+                >
+                  Reset
+                </button>
+                <button
+                  className="rounded-md border px-3 py-1.5 text-sm hover:bg-black/[.03] dark:hover:bg-white/[.06] disabled:opacity-50"
+                  disabled={isSearching}
+                  onClick={onSearch}
+                >
+                  {isSearching ? "Searching..." : "Search products"}
+                </button>
+              </div>
+              <div
+                ref={containerRef}
+                className="relative select-none inline-block max-w-full"
+                onMouseDown={onMouseDown}
+                onMouseMove={onMouseMove}
+                onMouseUp={onMouseUp}
+              >
+                <img
+                  ref={imgRef}
+                  src={imageUrl}
+                  onLoad={onImageLoad}
+                  alt="uploaded"
+                  className="max-w-full h-auto rounded-md border"
+                  style={{ maxHeight: 520 }}
+                />
+                {selection && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: selection.x,
+                      top: selection.y,
+                      width: selection.width,
+                      height: selection.height,
+                      border: "2px solid #60a5fa",
+                      background: "rgba(96,165,250,0.15)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
+              </div>
+              <p className="text-xs text-neutral-500 mt-2">Drag to draw a rectangle around the object. Click Search products to find matches.</p>
+            </div>
+            <div>
+              <h2 className="text-lg font-medium mb-3">Results</h2>
+              {results.length === 0 && (
+                <p className="text-sm text-neutral-500">No results yet.</p>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {results.map((item) => (
+                  <a
+                    key={item.id}
+                    href={item.linkUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-md border p-2 hover:shadow-sm transition"
+                  >
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.title} className="w-full h-36 object-cover rounded" loading="lazy" />
+                    ) : (
+                      <div className="w-full h-36 bg-neutral-100 dark:bg-neutral-800 rounded" />
+                    )}
+                    <div className="mt-2 text-sm line-clamp-2">{item.title || "Untitled"}</div>
+                    <div className="text-xs text-neutral-500 mt-1">
+                      {(item.priceText ? item.priceText + " • " : "") + (item.source || "")}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }

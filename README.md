@@ -1,5 +1,39 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Objektify – Visual shopping from any image
+
+Upload a photo (even AI-generated), draw a box around the object you want, and get product results from the web to buy the item or similar ones.
+
+### Getting started
+
+1. Install dependencies:
+
+```
+npm install
+```
+
+2. Set environment variables (create a `.env.local`):
+
+```
+SERPAPI_KEY=your_serpapi_key
+```
+
+You can get a key from Azure Cognitive Services (Bing Visual Search) in the Azure Portal.
+
+3. Run the dev server:
+
+```
+npm run dev
+```
+
+4. Open http://localhost:3000 and upload an image. Drag to select the object and click "Search products".
+
+### Notes
+
+- The API route `src/app/api/visual-search/route.ts` posts the image bytes to Bing Visual Search and simplifies results to a small item list.
+- Remote images from major CDNs are allowed via `next.config.ts`.
+- If Bing returns no shopping sources, the UI falls back to visually similar items.
+
 ## Getting Started
 
 First, run the development server:
