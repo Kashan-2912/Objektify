@@ -15,8 +15,9 @@ export async function POST(req: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 10);
     await UserModel.create({ email: email.toLowerCase(), name, hashedPassword, credits: 5, wishlist: [] });
     return new Response("ok", { status: 201 });
-  } catch (e: any) {
-    return new Response(e?.message || "Unknown error", { status: 500 });
+  } catch (e) {
+    const errorMessage = (e instanceof Error && e.message) ? e.message : "Unknown error";
+    return new Response(errorMessage, { status: 500 });
   }
 }
 

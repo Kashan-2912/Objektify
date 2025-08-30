@@ -28,7 +28,11 @@ const handler = NextAuth({
         if (!user || !user.hashedPassword) return null;
         const ok = await bcrypt.compare(password, user.hashedPassword);
         if (!ok) return null;
-        return { id: String(user._id), email: user.email, name: user.name || undefined } as any;
+        return {
+          id: String(user._id),
+          email: user.email,
+          name: user.name || undefined,
+        } as { id: string; email: string; name?: string };
       },
     }),
   ],
@@ -36,5 +40,3 @@ const handler = NextAuth({
 });
 
 export { handler as GET, handler as POST };
-
-

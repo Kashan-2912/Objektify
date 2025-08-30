@@ -43,8 +43,9 @@ export async function POST(req: NextRequest) {
       }
     }
     return new Response("ok", { status: 200 });
-  } catch (e: any) {
-    return new Response(e?.message || "error", { status: 500 });
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "error";
+    return new Response(errorMessage, { status: 500 });
   }
 }
 

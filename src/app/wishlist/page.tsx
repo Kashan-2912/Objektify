@@ -32,8 +32,8 @@ export default function WishlistPage() {
         <h1 className="text-2xl sm:text-3xl font-semibold mb-6">Your Wishlist</h1>
         {!email && <p className="text-sm text-neutral-500">Sign in to view your wishlist.</p>}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {items.map((item) => (
-            <div key={item.id} className="rounded-md border p-2">
+          {items.map((item, index) => (
+            <div key={item.id + index} className="rounded-md border p-2">
               {item.imageUrl ? (
                 <img src={item.imageUrl} alt={item.title} className="w-full h-36 object-cover rounded" />
               ) : (

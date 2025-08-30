@@ -32,8 +32,9 @@ export async function POST(req: NextRequest) {
     const cancel = encodeURIComponent(`${origin}/?payment=cancel`);
     const url = `${baseUrl}${sep}checkout%5Bsuccess_url%5D=${success}&checkout%5Bcancel_url%5D=${cancel}`;
     return new Response(JSON.stringify({ url }), { status: 200, headers: { "Content-Type": "application/json" } });
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e?.message || "Unknown error" }), { status: 500 });
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    return new Response(JSON.stringify({ error: errorMessage }), { status: 500 });
   }
 }
 

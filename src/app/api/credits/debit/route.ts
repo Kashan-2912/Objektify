@@ -16,9 +16,17 @@ export async function POST(req: NextRequest) {
       { $inc: { credits: -Math.abs(amount) } },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     ).lean();
-    return new Response(JSON.stringify({ credits: user?.credits ?? 0 }), { status: 200 });
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e?.message || "Unknown error" }), { status: 500 });
+
+    // Type guard to ensure user is not an array and has credits property
+    let credits = 0;
+    if (user && !Array.isArray(user) && typeof user.credits === "number") {
+      credits = user.credits;
+    }
+
+    return new Response(JSON.stringify({ credits }), { status: 200 });
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    return new Response(JSON.stringify({ error: errorMessage }), { status: 500 });
   }
 }
 
