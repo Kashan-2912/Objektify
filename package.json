@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "framer-motion": "^12.23.12",
     "mongodb": "^6.19.0",
     "mongoose": "^8.18.0",

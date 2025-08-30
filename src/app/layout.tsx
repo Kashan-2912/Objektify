@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Link from "next/link";
+import ClientHeader from "./widgets/ClientHeader";
+import Providers from "./providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,7 +30,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <Providers>
+          <header className="w-full border-b border-black/[.08] dark:border-white/[.145]">
+            <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+              <Link href="/" className="font-semibold">Objektify</Link>
+              <ClientHeader />
+            </div>
+          </header>
+          {children}
+        </Providers>
       </body>
     </html>
   );

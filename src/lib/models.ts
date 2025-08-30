@@ -5,6 +5,7 @@ export interface IUser {
   email: string;
   name?: string;
   image?: string;
+  hashedPassword?: string;
   credits: number;
   wishlist: Array<{
     id: string;
@@ -34,6 +35,7 @@ const UserSchema = new Schema<IUser>({
   email: { type: String, required: true, unique: true },
   name: String,
   image: String,
+  hashedPassword: String,
   credits: { type: Number, default: 5 },
   wishlist: { type: [WishlistItemSchema], default: [] },
 });

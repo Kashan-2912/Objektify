@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSession, signIn } from "next-auth/react";
 
 type ProductItem = {
   id: string;
@@ -19,15 +20,13 @@ type Selection = {
 };
 
 export default function Home() {
+  const { data: session } = useSession();
   const [file, setFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [imgNatural, setImgNatural] = useState<{ w: number; h: number } | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<ProductItem[]>([]);
-  const [email, setEmail] = useState<string>("");
-  const [credits, setCredits] = useState<number | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -53,10 +52,7 @@ export default function Home() {
     return { w: img.clientWidth, h: img.clientHeight };
   }, [imageUrl]);
 
-  const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    const el = e.currentTarget;
-    setImgNatural({ w: el.naturalWidth, h: el.naturalHeight });
-  }, []);
+  const onImageLoad = useCallback((_e: React.SyntheticEvent<HTMLImageElement>) => {}, []);
 
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!imgRef.current) return;
@@ -112,6 +108,12 @@ export default function Home() {
 
   const onSearch = useCallback(async () => {
     if (!file && !imageUrl) return;
+    const sessionEmail = session?.user?.email;
+    if (!sessionEmail) {
+      alert("Please sign in first.");
+      signIn();
+      return;
+    }
     setIsSearching(true);
     setResults([]);
     try {
@@ -127,7 +129,7 @@ export default function Home() {
       const filename = (file && file.name) || "crop.jpg";
       form.append("image", blobToSend, filename);
       form.append("filename", filename);
-      if (email) form.append("email", email);
+      form.append("email", sessionEmail);
       const res = await fetch("/api/visual-search", { method: "POST", body: form });
       if (res.status === 404) {
         // Try alternate route path if framework didn't register the first one
@@ -154,20 +156,13 @@ export default function Home() {
       }
       const data = (await res.json()) as { items: ProductItem[] };
       setResults(data.items || []);
-      if (email) {
-        try {
-          const r = await fetch(`/api/user?email=${encodeURIComponent(email)}`);
-          const j = await r.json();
-          if (typeof j.credits === "number") setCredits(j.credits);
-        } catch {}
-      }
     } catch (err) {
       console.error(err);
       alert("Search failed. Check console for details.");
     } finally {
       setIsSearching(false);
     }
-  }, [file, imageUrl, selection, cropToBlob, email]);
+  }, [file, imageUrl, selection, cropToBlob, session?.user?.email]);
 
   const clearAll = useCallback(() => {
     setFile(null);
@@ -184,38 +179,6 @@ export default function Home() {
           <div className="border border-black/[.08] dark:border-white/[.145] rounded-xl p-6">
             <p className="mb-3">Upload an image of the object you want to buy:</p>
             <input type="file" accept="image/*" onChange={onFileChange} />
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="email"
-                placeholder="Your email (for credits & wishlist)"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="border rounded-md px-3 py-2 text-sm bg-transparent"
-              />
-              <button
-                className="rounded-md border px-3 py-2 text-sm hover:bg-black/[.03] dark:hover:bg-white/[.06]"
-                onClick={async () => {
-                  if (!email) return alert("Enter email first");
-                  try {
-                    const r = await fetch(`/api/user?email=${encodeURIComponent(email)}`);
-                    if (!r.ok) {
-                      let msg = "Failed to fetch credits";
-                      try { msg = await r.text(); } catch {}
-                      alert(msg);
-                      return;
-                    }
-                    let j: any = null;
-                    try { j = await r.json(); } catch { j = {}; }
-                    setCredits(typeof j.credits === "number" ? j.credits : 0);
-                  } catch (e) {
-                    console.error(e);
-                    alert("Failed to fetch credits. Check server console.");
-                  }
-                }}
-              >
-                Check credits{credits !== null ? `: ${credits}` : ""}
-              </button>
-            </div>
             <p className="text-xs text-neutral-500 mt-2">Tip: After uploading, drag to select the object to focus search.</p>
           </div>
         )}
@@ -277,13 +240,7 @@ export default function Home() {
               )}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {results.map((item) => (
-                  <a
-                    key={item.id}
-                    href={item.linkUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-md border p-2 hover:shadow-sm transition"
-                  >
+                  <div key={item.id} className="rounded-md border p-2 hover:shadow-sm transition">
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt={item.title} className="w-full h-36 object-cover rounded" loading="lazy" />
                     ) : (
@@ -293,7 +250,38 @@ export default function Home() {
                     <div className="text-xs text-neutral-500 mt-1">
                       {(item.priceText ? item.priceText + " • " : "") + (item.source || "")}
                     </div>
-                  </a>
+                    <div className="mt-2 flex items-center gap-2">
+                      <a
+                        href={item.linkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-md border px-2 py-1 text-xs"
+                      >
+                        Open
+                      </a>
+                      <button
+                        className="rounded-md border px-2 py-1 text-xs"
+                        onClick={async ()=>{
+                          try {
+                            const sessionEmail = session?.user?.email;
+                            if (!sessionEmail) { signIn(); return; }
+                            const res = await fetch("/api/wishlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: sessionEmail, item: {
+                              id: item.id,
+                              title: item.title,
+                              imageUrl: item.imageUrl,
+                              linkUrl: item.linkUrl,
+                              source: item.source,
+                              priceText: item.priceText,
+                            } }) });
+                            if (!res.ok) { const t = await res.text(); alert(t || "Failed to save"); return; }
+                            alert("Saved to wishlist");
+                          } catch (e) { console.error(e); alert("Failed to save"); }
+                        }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
