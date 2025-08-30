@@ -7,10 +7,11 @@ if (!MONGODB_URI) {
   console.warn("MONGODB_URI is not set");
 }
 
-let cached = (global as any).mongoose as { conn: typeof mongoose | null; promise: Promise<typeof mongoose> | null };
-
-if (!cached) {
-  cached = (global as any).mongoose = { conn: null, promise: null };
+type MongooseCache = { conn: typeof mongoose | null; promise: Promise<typeof mongoose> | null };
+const globalForMongoose = global as unknown as { __mongooseCache?: MongooseCache };
+const cached: MongooseCache = globalForMongoose.__mongooseCache ?? { conn: null, promise: null };
+if (!globalForMongoose.__mongooseCache) {
+  globalForMongoose.__mongooseCache = cached;
 }
 
 export async function connectToDatabase() {
