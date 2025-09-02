@@ -18,6 +18,7 @@ npm install
 
 ```
 SERPAPI_KEY=your_serpapi_key
+ALL_LEMON_SQUEEZY_API_KEYS
 ```
 
 You can get a key from Azure Cognitive Services (Bing Visual Search) in the Azure Portal.
